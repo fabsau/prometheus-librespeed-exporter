@@ -1,141 +1,84 @@
-# prometheus-librespeed-exporter
+# Prometheus LibreSpeed Exporter
+This readme provides an in-depth guide on how to utilize the `prometheus-librespeed-exporter` project, a [Prometheus](https://prometheus.io/) exporter based on the [speedtest-cli](https://github.com/librespeed/speedtest-cli) by [librespeed](https://github.com/librespeed). The exporter tool allows you to measure network performance effectively.
 
-## Introduction
+This project is a fork of the one found [here](https://github.com/brendonmatheson/prometheus-librespeed-exporter), enriched with updates, additional metrics, more features, better customizability and improved error handling.
 
-This project packages the [speedtest-cli](https://github.com/librespeed/speedtest-cli) provided by the [librespeed](https://github.com/librespeed) project as a [Prometheus](https://prometheus.io/) exporter that can be used for measuring network performance.
 
-This exporter is available as a [multi-arch image in Docker Hub](https://hub.docker.com/r/brendonmatheson/prometheus-librespeed-exporter) and the sources are offered through [GitHub](https://github.com/brendonmatheson/prometheus-librespeed-exporter) under the terms of the Apache Software License.
+## Docker
+You can easily run the Prometheus LibreSpeed Exporter using Docker. Here is how you can get up and running in no time:
 
-## Acknowledgement
-
-The approach used in this project is styled after the work of [billimek](https://github.com/billimek) in his [prometheus-speedtest-exporter](https://github.com/billimek/prometheus-speedtest-exporter) that builds a [script_exporter](https://github.com/ricoberger/script_exporter) on the [Ookla speedtest-cli](https://www.speedtest.net/apps/cli)
-
-## Quick Start
-
-### Introduction
-
-In this quick start we will launch the exporter with default settings, scrape metrics, optionally add it to a Docker Compose stack, and add a Prometheus job.
-
-### Launch Exporter
-
-First run the exporter as follows:
-
+### Running with Docker Run
+This command will pull and start the most recent Docker container using the specified image and port.
 ```bash
 docker run \
     --rm -it \
     -p 9469:9469 \
-    brendonmatheson/prometheus-librespeed-exporter:1.0.0
+    -e USE_PUBLIC_TEST_SERVER=TRUE \
+    ghcr.io/fabsau/prometheus-librespeed-exporter:latest
 ```
 
-Note that by default `librespeed-cli` will automatically select a server to use if you don't specify one.   We will see how to specify servers later.
-
-Now in a different terminal test that it is able to yield metrics with `curl`:
-
-```bash
-curl http://localhost:9469/probe?script=librespeed
-```
-
-Note that this command will take up to a minute to complete as it actually performing the speed test before it returns the results.  Once complete you should see result:
-
-```
-$ curl http://localhost:9469/probe?script=librespeed
-
-# HELP script_success Script exit status (0 = error, 1 = success).
-# TYPE script_success gauge
-script_success{script="librespeed"} 1
-# HELP script_duration_seconds Script execution time, in seconds.
-# TYPE script_duration_seconds gauge
-script_duration_seconds{script="librespeed"} 55.734358
-# HELP script_exit_code The exit code of the script.
-# TYPE script_exit_code gauge
-script_exit_code{script="librespeed"} 0
-librespeed_bytes_sent{server="Singapore (Salvatore Cahyo)"} 61341664
-librespeed_bytes_received{server="Singapore (Salvatore Cahyo)"} 34770600
-librespeed_ping{server="Singapore (Salvatore Cahyo)"} 43.63636363636363
-librespeed_jitter{server="Singapore (Salvatore Cahyo)"} 0.38
-librespeed_download{server="Singapore (Salvatore Cahyo)"} 17.83
-librespeed_upload{server="Singapore (Salvatore Cahyo)"} 31.44
-```
-
-### Run Exporter in Docker Compose
-
-If you are using Docker Compose the equivalent service definition is:
-
+### Running with Docker Compose
 ```yaml
+services:
   librespeed_exporter:
-    image: "brendonmatheson/prometheus-librespeed-exporter:1.0.0"
+    image: "ghcr.io/fabsau/prometheus-librespeed-exporter:latest"
     ports:
       - "9469:9469"
     restart: "always"
+    environment:
+      - "USE_PUBLIC_TEST_SERVER=TRUE"
 ```
 
-### Prometheus Job
 
-Now add a job to your Prometheus configuration:
+## Configuration
 
-```yaml
-  - job_name: "librespeed"
-    metrics_path: /probe
-    params:
-      script: [librespeed]
-    static_configs:
-      - targets:
-          - myexporterhostname:9469
-    scrape_interval: 360m
-    scrape_timeout: 2m
+### Environment Variables
+```
+# Description: Toggle to enable the use of public servers for speed tests. For testing it will automatically pick the closest server.
+# Options: TRUE or FALSE (case-insensitive)
+# Default: FALSE
+USE_PUBLIC_TEST_SERVER=TRUE
+
+# Description: Specifies the file path to a custom json file containing custom server details for speed testing.
+# Type: string (file path)
+# Default: not set
+# CUSTOM_SERVER_FILE=/your/path/to/server/file.json
+
+# Description: This variable contains a list of specific server IDs to be used from the CUSTOM_SERVER_FILE.
+# The server IDs should match those in your CUSTOM_SERVER_FILE. If no server IDs are specified, all servers listed in CUSTOM_SERVER_FILE will be used for tests.
+# Type: string (comma-separated values)
+# Default: not set
+# SPECIFIC_SERVER_IDS=1,2,3
+
+# Description: Holds additional command line arguments for the librespeed-cli tool.
+# Refer to the librespeed-cli usage guide for information about the command line options.
+# https://github.com/librespeed/speedtest-cli#usage
+# Type: string
+# Default: not set
+# CUSTOM_ARGS=--duration 15 --no-download
 ```
 
-Since the test can take some time (up to a minute for a single scan from our observations) ensure that the timeout allows for this.  Also consider running the test infrequently to avoid generating large data transfers.  the `librespeed_bytes_sent` and `librespeed_bytes_received` metrics give you visibility on the volume of data transferred during the test.
+### Using Custom Servers
+With LibreSpeed, you're not limited to public servers. You can define your own custom servers for performing the speed test. Register them in a dedicated JSON file and path to it using the `CUSTOM_SERVER_FILE` environment variable. Make sure to path down the volume and create the file before starting the container.
 
-Also note that testing your configuration may be difficult when you have a long scrape_interval like 360 minutes as above, so you may want to start with a short interval such as 2 minutes.
+See the [librespeed / speedtest-cli documentation](https://github.com/librespeed/speedtest-cli#use-a-custom-backend-server-list) for additional details on creating custom server.
 
-## Custom Servers
-
-### Introduction
-
-In addition to the librespeed-cli which is the basis for this Prometheus exporter, the librespeed project also offer a self-hostable speedtest server and the CLI can be configured to use custom servers instead of public servers.  This can be useful for measuring performance across private networks.
-
-### Speedtest Server
-
-To run a speedtest server you can use the command line:
-
-```bash
-docker run --rm -it adolfintel/speedtest:5.2.4
-```
-
-If you use docker-compose then you can use a service entry such as the following:
-
-```yaml
-librespeed_service:
-    image: "adolfintel/speedtest:5.2.4"
-    ports:
-      - "80:80"
-    restart: "always"
-```
-
-See the [librespeed / speedtest](https://github.com/librespeed/speedtest/blob/master/doc_docker.md) project for comprehensive documentation.
-
-### Backends
-
-Next you will need to create a JSON file that provides the details of your custom server (or servers) so that the exporter knows where to find them.
-
-In the following example we are running two different private speedtest servers, and register them in our custom backends file with the names "bkk80" and "hea92":
-
+#### librespeed-backends.json:
 ```json
 [
   {
-    "id": 80,
-    "name": "bkk80",
-    "server": "http://speedtest.bkk80.aleisium.com/",
+    "id": 1,
+    "name": "server1",
+    "server": "http://speedtest.example1.com/",
     "dlURL": "backend/garbage.php",
     "ulURL": "backend/empty.php",
     "pingURL": "backend/empty.php",
     "getIpURL": "backend/getIP.php"
   },
   {
-    "id": 92,
-    "name": "hea92",
-    "server": "http://speedtest.hea92.aleisium.com/",
+    "id": 2,
+    "name": "server2",
+    "server": "http://speedtest.example2.com/",
     "dlURL": "backend/garbage.php",
     "ulURL": "backend/empty.php",
     "pingURL": "backend/empty.php",
@@ -144,42 +87,34 @@ In the following example we are running two different private speedtest servers,
 ]
 ```
 
-See the [librespeed / speedtest-cli documentation](https://github.com/librespeed/speedtest-cli#use-a-custom-backend-server-list) for additional details.
-
-### Run the Exporter
-
-We must now mount the backends JSON into the exporter, and specify the servers we want it to use via an environment variable, unless we want it to automatically select the server.
-
-Command-line launch will now be as follows:
-
-```bash
-docker run \
-    --rm -it \
-    --env SERVER_IDS=80,92
-    -p 9469:9469 \
-    -v $(pwd)/librespeed-backends.json:/librespeed-backends.json \
-    brendonmatheson/prometheus-librespeed-exporter:1.0.0
-```
-
-Note the backends file can be named anything you like, but must be mounted at `/librespeed-backends.json`.
-
-The equivalent Docker Compose service definition is:
-
+#### docker-compose:
 ```yaml
-librespeed_exporter:
-    environment:
-      - "SERVER_IDS=80,92"
-    image: "brendonmatheson/prometheus-librespeed-exporter:1.0.0"
+services:
+  librespeed_exporter:
+    image: "ghcr.io/fabsau/prometheus-librespeed-exporter:latest"
     ports:
       - "9469:9469"
     restart: "always"
+    environment:
+      - "USE_PUBLIC_TEST_SERVER=FALSE"
+      - "CUSTOM_SERVER_FILE=/librespeed-backends.json"
+      - "SPECIFIC_SERVER_IDS=1"
+      - "CUSTOM_ARGS=--duration 15 --no-download"
     volumes:
-      - "./librespeed-backends.json:/librespeed-backends.json"
+      - ./librespeedexporter/librespeed-backends.json:/librespeed-backends.json
 ```
 
-### Configure Prometheus Job
+### Testing the Exporter
+You can validate the exporter's functionality by testing if it produces the expected metrics:
 
-The Prometheus job is the same as for our Quick Start:
+```bash
+curl http://localhost:9469/probe?script=librespeed
+```
+Remember, the speed test may take up to a minute as the test performs on each load.
+
+## Integration
+### Setting Up Prometheus
+Now, include a job in your Prometheus configuration:
 
 ```yaml
   - job_name: "librespeed"
@@ -189,89 +124,213 @@ The Prometheus job is the same as for our Quick Start:
     static_configs:
       - targets:
           - myexporterhostname:9469
-    scrape_interval: 360m
-    scrape_timeout: 4m
+    scrape_interval: 60m
+    scrape_timeout: 5m
 ```
+Remember to consider the speed test duration when setting the `scrape_timeout` and `scrape_interval` parameters.
 
-Note that now that we are running two speedtests for each probe, we have doubled the timeout.
-
-## Disable Download and / or Upload
-
-The `librespeed-cli` offers `--no-download` and `--no-upload` switches which can be applied to the exporter by setting the `PERFORM_DOWNLOAD` and `PERFORM_UPLOAD` environment variables to `FALSE`.
-
-For example the following Docker Compose service entry will run the exporter but only perform download tests upon each probe:
+### Setting Up Alerts
+Prometheus allows the configuration of alerts for notifications when speed test results drop below a chosen threshold.
+The following examples serve as a guide to the potent monitoring capabilities of the exporter. Remember, these samples should be fine-tuned to align with the unique conditions of your operational environment.
 
 ```yaml
-librespeed_exporter:
-    environment:
-      - "SERVER_IDS=80,92"
-      - "PERFORM_UPLOAD=FALSE"
-    image: "brendonmatheson/prometheus-librespeed-exporter:1.0.0"
-    ports:
-      - "9469:9469"
-    restart: "always"
-    volumes:
-      - "./librespeed-backends.json:/librespeed-backends.json"
+groups:
+  - name: LibrespeedAlerts
+    rules:
+      - alert: HighPing
+        expr: librespeed_ping > 100
+        for: 120m
+        labels:
+          severity: warning
+        annotations:
+          description: Ping is high (above 100ms) on '{{ $labels.server }}'
+
+      - alert: HighJitter
+        expr: librespeed_jitter > 2
+        for: 120m
+        labels:
+          severity: warning
+        annotations:
+          description: Jitter is high (above 2ms) on '{{ $labels.server }}'
+
+      - alert: LowDownloadSpeedPublic
+        expr: librespeed_download < 187.5 and librespeed_server_info{server_type="public"} == 1
+        for: 120m
+        labels:
+          severity: warning
+        annotations:
+          description: Download speed is below 75 percent of 250Mbps (187.5Mbps) on public server '{{ $labels.server }}'
+
+      - alert: LowUploadSpeedPublic
+        expr: librespeed_upload < 37.5 and librespeed_server_info{server_type="public"} == 1
+        for: 120m
+        labels:
+          severity: warning
+        annotations:
+          description: Upload speed is below 75 percent of 50Mbps (37.5Mbps) on public server '{{ $labels.server }}'
+
+      - alert: LowDownloadSpeedCustom
+        expr: librespeed_download < 500 and librespeed_server_info{server_type="custom"} == 1
+        for: 120m
+        labels:
+          severity: warning
+        annotations:
+          description: Download speed is below 500Mbps on custom server '{{ $labels.server }}'
+
+      - alert: LowUploadSpeedCustom
+        expr: librespeed_upload < 100 and librespeed_server_info{server_type="custom"} == 1
+        for: 120m
+        labels:
+          severity: warning
+        annotations:
+          description: Upload speed is below 100Mbps on custom server '{{ $labels.server }}'
+
+      - alert: LowDownloadSpeedServer2
+        expr: librespeed_download{server="server2"} < 750
+        for: 120m
+        labels:
+          severity: warning
+        annotations:
+          description: Download speed is below 75 percent of 1Gbps (750Mbps) on server2
+
+      - alert: LowUploadSpeedServer2
+        expr: librespeed_upload{server="server2"} < 750
+        for: 120m
+        labels:
+          severity: warning
+        annotations:
+          description: Upload speed is below 75 percent of 1Gbps (750Mbps) on server2
 ```
 
-The `librespeed_upload` metric will be omitted from the probe results:
 
+## Example Metrics
+With `USE_PUBLIC_TEST_SERVER=TRUE` and 2 custom servers, the exporter will produce the following metrics:
 ```
 # HELP script_success Script exit status (0 = error, 1 = success).
 # TYPE script_success gauge
 script_success{script="librespeed"} 1
 # HELP script_duration_seconds Script execution time, in seconds.
 # TYPE script_duration_seconds gauge
-script_duration_seconds{script="librespeed"} 94.033419
+script_duration_seconds{script="librespeed"} 137.500992
 # HELP script_exit_code The exit code of the script.
 # TYPE script_exit_code gauge
 script_exit_code{script="librespeed"} 0
-librespeed_bytes_sent{server="bkk80"} 0
-librespeed_bytes_received{server="bkk80"} 166673450
-librespeed_ping{server="bkk80"} 6.2727272727272725
-librespeed_jitter{server="bkk80"} 1
-librespeed_download{server="bkk80"} 85.44
+# HELP librespeed_server_info Information about the Librespeed server.
+# TYPE librespeed_server_info gauge
+librespeed_server_info{server="Nuremberg, Germany (4) (Hetzner)", url="http://de5.backend.librespeed.org", server_type="public"} 1
+# HELP librespeed_download Download speed in Mbps.
+# TYPE librespeed_download gauge
+librespeed_download{server="Nuremberg, Germany (4) (Hetzner)"} 261.42
+# HELP librespeed_upload Upload speed in Mbps.
+# TYPE librespeed_upload gauge
+librespeed_upload{server="Nuremberg, Germany (4) (Hetzner)"} 47.94
+# HELP librespeed_ping Ping in ms.
+# TYPE librespeed_ping gauge
+librespeed_ping{server="Nuremberg, Germany (4) (Hetzner)"} 14
+# HELP librespeed_jitter Jitter in ms.
+# TYPE librespeed_jitter gauge
+librespeed_jitter{server="Nuremberg, Germany (4) (Hetzner)"} 0.28
+# HELP librespeed_bytes_received Bytes received during the test.
+# TYPE librespeed_bytes_received gauge
+librespeed_bytes_received{server="Nuremberg, Germany (4) (Hetzner)"} 509796192
+# HELP librespeed_bytes_sent Bytes sent during the test.
+# TYPE librespeed_bytes_sent gauge
+librespeed_bytes_sent{server="Nuremberg, Germany (4) (Hetzner)"} 93487104
+# HELP librespeed_client_info Information about the Librespeed client.
+# TYPE librespeed_client_info gauge
+librespeed_client_info{server="Nuremberg, Germany (4) (Hetzner)", ip="", hostname="", org=""} 1
+# HELP librespeed_client_location_info Location information about the Librespeed client.
+# TYPE librespeed_client_location_info gauge
+librespeed_client_location_info{server="Nuremberg, Germany (4) (Hetzner)", city="", postal="", region="", country="", loc="", timezone=""} 1
+# HELP librespeed_server_info Information about the Librespeed server.
+# TYPE librespeed_server_info gauge
+librespeed_server_info{server="server1", url="http://speedtest.example1.com/", server_type="custom"} 1
+# HELP librespeed_download Download speed in Mbps.
+# TYPE librespeed_download gauge
+librespeed_download{server="server1"} 255.43
+# HELP librespeed_upload Upload speed in Mbps.
+# TYPE librespeed_upload gauge
+librespeed_upload{server="server1"} 48.71
+# HELP librespeed_ping Ping in ms.
+# TYPE librespeed_ping gauge
+librespeed_ping{server="server1"} 13
+# HELP librespeed_jitter Jitter in ms.
+# TYPE librespeed_jitter gauge
+librespeed_jitter{server="server1"} 2.5
+# HELP librespeed_bytes_received Bytes received during the test.
+# TYPE librespeed_bytes_received gauge
+librespeed_bytes_received{server="server1"} 498120232
+# HELP librespeed_bytes_sent Bytes sent during the test.
+# TYPE librespeed_bytes_sent gauge
+librespeed_bytes_sent{server="server1"} 94994432
+# HELP librespeed_client_info Information about the Librespeed client.
+# TYPE librespeed_client_info gauge
+librespeed_client_info{server="server1", ip="123.45.67.89", hostname="myhostname.com", org="My ISP GmbH"} 1
+# HELP librespeed_client_location_info Location information about the Librespeed client.
+# TYPE librespeed_client_location_info gauge
+librespeed_client_location_info{server="server1", city="Berlin", postal="12345", region="Berlin State", country="DE", loc="42.16802,14.4209", timezone="Europe/Berlin"} 1
+# HELP librespeed_server_info Information about the Librespeed server.
+# TYPE librespeed_server_info gauge
+librespeed_server_info{server="server2", url="http://speedtest.example2.com/", server_type="custom"} 1
+# HELP librespeed_download Download speed in Mbps.
+# TYPE librespeed_download gauge
+librespeed_download{server="server2"} 1762.8
+# HELP librespeed_upload Upload speed in Mbps.
+# TYPE librespeed_upload gauge
+librespeed_upload{server="server2"} 140.58
+# HELP librespeed_ping Ping in ms.
+# TYPE librespeed_ping gauge
+librespeed_ping{server="server2"} 0
+# HELP librespeed_jitter Jitter in ms.
+# TYPE librespeed_jitter gauge
+librespeed_jitter{server="server2"} 0.12
+# HELP librespeed_bytes_received Bytes received during the test.
+# TYPE librespeed_bytes_received gauge
+librespeed_bytes_received{server="server2"} 3438131088
+# HELP librespeed_bytes_sent Bytes sent during the test.
+# TYPE librespeed_bytes_sent gauge
+librespeed_bytes_sent{server="server2"} 274169856
+# HELP librespeed_client_info Information about the Librespeed client.
+# TYPE librespeed_client_info gauge
+librespeed_client_info{server="server2", ip="", hostname="", org=""} 1
+# HELP librespeed_client_location_info Location information about the Librespeed client.
+# TYPE librespeed_client_location_info gauge
+librespeed_client_location_info{server="server2", city="", postal="", region="", country="", loc="", timezone=""} 1
 ```
 
-## Building
 
-### Architecture Support
+## Building the Docker Image
 
-This image has been developed and tested on 32-bit Raspbian (armv7) and 64-bit Debian (amd64).
+### Docker Build
 
-Other architectures may work, or may require additional changes to the Dockerfile to correctly map the arch tags to the names of the librespeed-cli and script_exporter binaries that are downloaded.
-
-### Building Locally
-
-To build from source, use the convenience script:
+In your terminal, navigate to the project directory where the Dockerfile resides and build the Docker image with the following command:
 
 ```bash
-./build-local.sh
-
-$ ./build-local.sh
-
-Sending build context to Docker daemon  103.4kB
-Step 1/11 : ARG TARGET_ARCH=
-Step 2/11 : FROM ${TARGET_ARCH}alpine:3.15.0
- ---> c059bfaa849c
-
-...
-
-Successfully tagged brendonmatheson/prometheus-librespeed-exporter:latest-local
+docker build -t your_image_name:tag --platform linux/amd64,linux/arm/v7,linux/arm64 .
 ```
 
-Note the image is tagged as `latest-local`.
+By using the `--platform` option, Docker will generate a multi-platform image.
 
-### Multi-Arch Image Build
+In this command:
+- `-t` tags your image.
+- `your_image_name` is the name you want to give to your Docker image.
+- `tag` represents the version of your Docker image.
+- `.` specifies that the Dockerfile is present in the current directory.
 
-The image published to Docker Hub was built using `docker buildx` as follows:
+Here's an example, say you want to tag your image as `prometheus-librespeed-exporter:1.0.0`:
 
 ```bash
-sudo docker buildx create --name builder --use
-
-sudo docker buildx build \
-    --platform linux/arm/v7,linux/amd64 \
-    --output=type=image,push=true \
-    -t brendonmatheson/prometheus-librespeed-exporter:1.0.0 .
+docker build -t prometheus-librespeed-exporter:1.0.0 --platform linux/amd64,linux/arm/v7,linux/arm64 .
 ```
 
+After the build process is complete, Docker will create an image identified by your specified image name and tag.
+
+Please replace `your_image_name` and `tag` with the appropriate image name and tag you desire.
+
+The building process might take a few minutes, depending on your machine's capabilities. Once the build is complete, you can confirm the creation of your image with the following command:
+
+```bash
+docker images
+```
+
+Your newly created image should appear in the listed output.
