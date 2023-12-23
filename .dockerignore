@@ -1,0 +1,7 @@
+.github
+.idea
+Dockerfile
+docker-compose.yml
+env-example
+LICENSE
+README.md

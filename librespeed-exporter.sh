@@ -11,7 +11,6 @@ get_metric_values() {
         local SERVER=$(jq -r ".[$i].server.name" <<< "$JSON") # Server name
 
 		# Extract various server metric values
-        local ID=$(jq -r ".[$i].server.id" <<< "$JSON")
         local URL=$(jq -r ".[$i].server.url" <<< "$JSON")
         local DOWNLOAD=$(jq -r ".[$i].download" <<< "$JSON")
         local UPLOAD=$(jq -r ".[$i].upload" <<< "$JSON")
@@ -34,7 +33,7 @@ get_metric_values() {
 		# Print metrics in Prometheus format
 		echo "# HELP librespeed_server_info Information about the Librespeed server."
 		echo "# TYPE librespeed_server_info gauge"
-		echo "librespeed_server_info{server=\"$SERVER\", url=\"$URL\"} 1"
+		echo "librespeed_server_info{server=\"$SERVER\", url=\"$URL\", server_type=\"$SERVER_TYPE\"} 1"
 
 		echo "# HELP librespeed_download Download speed in Mbps."
 		echo "# TYPE librespeed_download gauge"
@@ -73,7 +72,8 @@ get_metric_values() {
 # This function runs the librespeed-cli test and then calls get_metric_values with the result.
 run_tests() {
     local TEST_RESULT=$(librespeed-cli --json $1)
-    get_metric_values "$TEST_RESULT"
+	  local SERVER_TYPE=$2
+    get_metric_values "$TEST_RESULT" "$SERVER_TYPE"
 }
 
 # Fetch ids from CUSTOM_SERVER_FILE if file exists and has content
@@ -109,10 +109,10 @@ fi
 
 # If USE_PUBLIC_TEST_SERVER is TRUE, perform test on public server
 if [[ $USE_PUBLIC_TEST_SERVER = "TRUE" ]]; then
-  run_tests "$CUSTOM_ARGS"
+  run_tests "$CUSTOM_ARGS" "public"
 fi
 
 # Run tests for each valid id from SPECIFIC_SERVER_IDS
 for id in "${tests_to_run[@]}"; do
-  run_tests "--local-json $CUSTOM_SERVER_FILE --server $id $CUSTOM_ARGS"
+  run_tests "--local-json $CUSTOM_SERVER_FILE --server $id $CUSTOM_ARGS" "custom"
 done
