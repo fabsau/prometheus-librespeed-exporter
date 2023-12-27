@@ -1,10 +1,11 @@
 name: Create Docker image and publish to registry
 
 on:
+  workflow_dispatch:
   schedule:
     - cron: '33 20 * * *'
   push:
-    branches: [ "master" ]
+    branches: [ "githubworkflows" ]
     # Publish semver tags as releases.
     tags: [ 'v*.*.*' ]
   pull_request:
