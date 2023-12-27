@@ -69,18 +69,17 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          # Generate extra flavor latest and tags for latest and version
-          flavor: |
-            latest=true
-            #dev=${{ github.event_name == 'schedule' }}
-            labels: true
-            tags: |
-              type=ref,event=branch
-              type=ref,event=pr
-              type=semver,pattern={{version}}
-              type=semver,pattern={{major}}.{{minor}}.{{patch}}
-              type=semver,pattern={{major}}.{{minor}}
-              type=sha,format=long,prefix=commit-
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}.{{patch}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=long,prefix=commit-
+          labels: |
+            org.opencontainers.image.title=prometheus-librespeed-exporter
+            org.opencontainers.image.description=A Prometheus exporter based on the speedtest-cli by librespeed
 
       # Build and push Docker image with Buildx (don't push on PR)
       # https://github.com/docker/build-push-action
